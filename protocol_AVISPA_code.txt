@@ -1,0 +1,69 @@
+%%% Key exchange protocol
+role role_U(U:agent,S:agent,Pub_s:public_key,K1,K3:symmetric_key,H:hash_func,SND,RCV:channel(dy))
+played_by U
+def=
+	local
+		State:nat,
+		IDu,Aa,Cu,T1:text,
+		Inc:hash_func,
+		I1,I2,S1,E1:message
+
+	init
+		State := 0
+	transition
+		1. State=0 /\ RCV(start) =|> State':=1 /\ S1' := H(IDu.Aa.Cu) /\ I1' := xor(IDu,(xor(H(T1),T1))) /\ I2' := {I1'}_Pub_s /\ E1' := {Aa.S1'.Cu}_K1 /\ SND(E1',I2',T1)
+end role
+
+role role_S(U:agent,S:agent,Pub_s:public_key,K1,K3:symmetric_key,H:hash_func,SND,RCV:channel(dy))
+played_by S
+def=
+	local
+		State:nat,
+		SKs:symmetric_key,
+		Bb,Cu,Cs,IDs,IDu,Epsilon,T1,T3:text,
+		Inc:hash_func,
+		S1,S2,E1,E2,Epsilon1,Eta,I2:message
+
+	init
+		State := 0
+	transition
+		1. State=0 /\ RCV(E1',I2',T1) =|> State':=1 /\ SKs':=new() /\ S2' := H(IDs.IDu.S1.Epsilon.SKs.T1) /\ Epsilon1' := xor(Epsilon,H(Cu.IDu.K1)) /\ Eta' := xor(IDs,H(Bb.Cs.Cu)) /\ E2' := {Eta'.Epsilon1'.Cs.Bb}_K3 /\ SND(E2',T3)
+ /\ secret(SKs',sec_1,{U,S}) /\ witness(S,U,auth_1,SKs')
+	
+end role
+
+role session(U:agent,S:agent,Pub_s:public_key,K1,K3:symmetric_key,H:hash_func)
+def=
+	local
+		SND2,RCV2,SND1,RCV1:channel(dy)
+	composition
+                role_U(U,S,Pub_s,K1,K3,H,SND1,RCV1) /\
+		role_S(S,U,Pub_s,K1,K3,H,SND2,RCV2)
+end role
+
+role environment()
+def=
+	const
+		pub_s,pub_i:public_key,
+		k1,k3,ski1,ski3:symmetric_key,
+		h:hash_func,
+                user,server:agent,        
+                sec_1,auth_1:protocol_id
+intruder_knowledge = {user,server,pub_s}    %% ... and we give it to the intruder
+	composition
+		%% We run the regular session
+		session(user,server,pub_s,k1,k3,h) 
+                  %% in parallel with another regular session
+                /\ session(server,user,pub_s,k1,k3,h) 
+		%% and a session between the intruder (with key ski) and distributed_server
+                /\ session(i,server,pub_i,ski1,ski3,h) 
+                  %% and a session between smart_meter and the intruder (with key ski)
+                /\ session(user,i,pub_i,ski1,ski3,h)
+end role
+
+goal
+	secrecy_of sec_1
+	authentication_on auth_1
+end goal
+
+environment()
